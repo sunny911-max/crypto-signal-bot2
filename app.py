@@ -10,8 +10,8 @@ import os
 app = Flask(__name__)
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-bot = Bot(token=BOT_TOKEN)
-
+bot = Bot(token=BOT_TOKEN)  
+ await bot.set_webhook(url="https://crypto-signal-bot2-te4s.onrender.com")
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]
 INTERVAL = "15m"
 LIMIT = 100
@@ -105,3 +105,11 @@ def home():
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=10000)
+
+@app.route(f'/{BOT_TOKEN}', methods=["POST"])
+def receive_update():
+    update = telegram.Update.de_json(request.get_json(force=True), bot)
+    bot.process_new_updates([update])
+    return 'ok', 200
+
+
