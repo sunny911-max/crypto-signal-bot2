@@ -37,16 +37,10 @@ async def analyze_and_send():
             volume = df["volume"].iloc[-1]
             avg_volume = df["volume"].mean()
             if rsi < 30 and volume > avg_volume * 1.5:
-                msg = f"📉 Oversold Signal
-Symbol: {symbol}
-RSI: {rsi:.2f}
-Volume: {volume:.2f}"
+                msg = f"📉 Oversold Signal\nSymbol: {symbol}\nRSI: {rsi:.2f}\nVolume: {volume:.2f}"
                 await bot.send_message(chat_id=CHAT_ID, text=msg)
             elif rsi > 70 and volume > avg_volume * 1.5:
-                msg = f"📈 Overbought Signal
-Symbol: {symbol}
-RSI: {rsi:.2f}
-Volume: {volume:.2f}"
+                msg = f"📈 Overbought Signal\nSymbol: {symbol}\nRSI: {rsi:.2f}\nVolume: {volume:.2f}"
                 await bot.send_message(chat_id=CHAT_ID, text=msg)
         except Exception as e:
             await bot.send_message(chat_id=CHAT_ID, text=f"Error for {symbol}: {str(e)}")
