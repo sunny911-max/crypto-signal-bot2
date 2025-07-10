@@ -1,77 +1,60 @@
-
-import os
-import threading
-import time
+import asyncio
+import logging
 from flask import Flask
-import requests
-import pandas as pd
-from ta.momentum import RSIIndicator
 from telegram import Bot
+from ta.momentum import RSIIndicator
+import pandas as pd
+import requests
+import os
 
 app = Flask(__name__)
-
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]  # Add more pairs if needed
-TIMEFRAME = "15m"
-RSI_BUY = 30
-RSI_SELL = 70
+bot = Bot(token=BOT_TOKEN)
 
-bot = Bot(token=TOKEN)
+SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]
+INTERVAL = "15m"
+LIMIT = 100
 
-def get_klines(symbol, interval="15m", limit=100):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+def fetch_data(symbol):
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={INTERVAL}&limit={LIMIT}"
     response = requests.get(url)
     data = response.json()
     df = pd.DataFrame(data, columns=[
-        'timestamp', 'open', 'high', 'low', 'close',
-        'volume', 'close_time', 'quote_asset_volume',
-        'num_trades', 'taker_buy_base', 'taker_buy_quote', 'ignore'
+        "timestamp", "open", "high", "low", "close", "volume",
+        "close_time", "quote_asset_volume", "number_of_trades",
+        "taker_buy_base_volume", "taker_buy_quote_volume", "ignore"
     ])
-    df['close'] = df['close'].astype(float)
-    df['volume'] = df['volume'].astype(float)
+    df["close"] = pd.to_numeric(df["close"])
+    df["volume"] = pd.to_numeric(df["volume"])
     return df
 
-def check_signal(symbol):
-    df = get_klines(symbol, TIMEFRAME)
-    rsi = RSIIndicator(close=df['close'], window=14).rsi()
-    last_rsi = rsi.iloc[-1]
-    avg_volume = df['volume'][:-1].mean()
-    last_volume = df['volume'].iloc[-1]
-
-    conf = 0
-    if last_rsi < RSI_BUY:
-        conf += 0.6
-    if last_volume > avg_volume * 1.5:
-        conf += 0.4
-    confidence = round(conf * 100)
-
-    if confidence >= 70:
-        direction = "Buy" if last_rsi < RSI_BUY else "Sell"
-        msg = f"""
-🚨 {direction} Signal: {symbol} ({TIMEFRAME})
-📊 RSI = {round(last_rsi, 2)}
-📈 Volume: {round(last_volume)} (+{round((last_volume/avg_volume)*100 - 100)}%)
-✅ Confidence: {confidence}%
-
-🔄 Entry Price: ${df['close'].iloc[-1]}
-🧠 Reason: RSI {'oversold' if last_rsi < 30 else 'overbought'} + volume surge
-        """
-        bot.send_message(chat_id=CHAT_ID, text=msg)
-
-def run_bot_loop():
-    while True:
-        for symbol in SYMBOLS:
-            try:
-                check_signal(symbol)
-            except Exception as e:
-                bot.send_message(chat_id=CHAT_ID, text=f"Error for {symbol}: {str(e)}")
-        time.sleep(900)  # 15 minutes
+async def analyze_and_send():
+    for symbol in SYMBOLS:
+        try:
+            df = fetch_data(symbol)
+            rsi = RSIIndicator(df["close"], window=14).rsi().iloc[-1]
+            volume = df["volume"].iloc[-1]
+            avg_volume = df["volume"].mean()
+            if rsi < 30 and volume > avg_volume * 1.5:
+                msg = f"📉 Oversold Signal
+Symbol: {symbol}
+RSI: {rsi:.2f}
+Volume: {volume:.2f}"
+                await bot.send_message(chat_id=CHAT_ID, text=msg)
+            elif rsi > 70 and volume > avg_volume * 1.5:
+                msg = f"📈 Overbought Signal
+Symbol: {symbol}
+RSI: {rsi:.2f}
+Volume: {volume:.2f}"
+                await bot.send_message(chat_id=CHAT_ID, text=msg)
+        except Exception as e:
+            await bot.send_message(chat_id=CHAT_ID, text=f"Error for {symbol}: {str(e)}")
 
 @app.route('/')
 def home():
-    return "Multi-Currency Crypto Signal Bot is running!"
+    asyncio.run(analyze_and_send())
+    return "Bot is running and analyzing!"
 
-if __name__ == "__main__":
-    threading.Thread(target=run_bot_loop, daemon=True).start()
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=10000)
