@@ -1,67 +1,36 @@
-import logging
-import os
 from flask import Flask, request
-from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import Bot, Update
+from telegram.ext import Dispatcher, CommandHandler
+import asyncio
+import logging
 
-# Telegram bot token and chat ID from environment
-TOKEN = os.getenv("TELEGRAM_TOKEN") or "YOUR_BOT_TOKEN"
-CHAT_ID = os.getenv("CHAT_ID") or "YOUR_CHAT_ID"
+# === BOT CONFIGURATION ===
+BOT_TOKEN = "7307067620:AAEOHrNskxLEWOcMKvuKtVbrJUYpD0zokMA"
+CHAT_ID = -4932382154  # Your group/chat ID
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+bot = Bot(token=BOT_TOKEN)
+app = Flask(__name__)
 
-# Flask app
-flask_app = Flask(__name__)
-bot = Bot(token=TOKEN)
+# === COMMAND HANDLER ===
+async def start(update: Update, context):
+    await update.message.reply_text("👋 Bot is live and ready!")
 
-# Telegram bot application
-tg_app = Application.builder().token(TOKEN).build()
+# === DISPATCHER ===
+dispatcher = Dispatcher(bot, None, workers=0, use_context=True)
+dispatcher.add_handler(CommandHandler("start", start))
 
-# Command handler: /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Welcome! High-risk scalping signals coming soon!")
-
-# Command handler: /help
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Use /start to begin. Bot will auto-post high-risk scalping signals.")
-
-# Add handlers
-tg_app.add_handler(CommandHandler("start", start))
-tg_app.add_handler(CommandHandler("help", help_command))
-
-# Example function to simulate a crypto signal (you can expand this)
-async def send_crypto_signal():
-    try:
-        msg = "⚡️ New Signal: Buy BTCUSDT (1m) - RSI oversold + high volume"
-        await bot.send_message(chat_id=CHAT_ID, text=msg)
-    except Exception as e:
-        logger.error(f"Failed to send message: {e}")
-
-# Flask webhook route
-@flask_app.route('/webhook', methods=['POST'])
-def webhook():
+# === WEBHOOK ENDPOINT ===
+@app.route('/webhook', methods=["POST"])
+def webhook_handler():
     if request.method == "POST":
         update = Update.de_json(request.get_json(force=True), bot)
-        tg_app.update_queue.put_nowait(update)
-        return 'ok'
-    return 'not allowed'
+        asyncio.run(dispatcher.process_update(update))
+    return "OK"
 
-# Root check
-@flask_app.route('/', methods=['GET'])
-def root():
-    return "🚀 Crypto Signal Bot Running!"
+# === ROOT ENDPOINT ===
+@app.route('/')
+def index():
+    return "👋 Crypto Signal Bot is Running!"
 
-# Start everything
-if __name__ == '__main__':
-    import asyncio
-    from threading import Thread
-
-    async def run_bot():
-        await tg_app.initialize()
-        await tg_app.start()
-        logger.info("Telegram Bot is running...")
-
-    Thread(target=lambda: asyncio.run(run_bot())).start()
-    flask_app.run(host='0.0.0.0', port=10000)
+# === OPTIONAL SIGNAL TESTING ===
+# Add your custom `analyze_and_send()` here if you want automated alerts
