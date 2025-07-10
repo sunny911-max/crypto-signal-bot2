@@ -1,115 +1,61 @@
+import os
 import asyncio
 import logging
-from flask import Flask
-from telegram import Bot
-from ta.momentum import RSIIndicator
-import pandas as pd
-import requests
-import os
+from flask import Flask, request
+from telegram import Update, Bot
+from telegram.ext import Application, CommandHandler, ContextTypes
 
+from signal_generator import analyze_and_send  # Your custom logic
+from threading import Thread
+
+# Environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://your-bot-url.onrender.com/webhook
+
+# Telegram Bot + Flask App
 app = Flask(__name__)
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-bot = Bot(token=BOT_TOKEN)  
- await bot.set_webhook(url="https://crypto-signal-bot2-te4s.onrender.com")
-SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]
-INTERVAL = "15m"
-LIMIT = 100
+application = Application.builder().token(BOT_TOKEN).build()
+bot = Bot(BOT_TOKEN)
 
-import asyncio
-import logging
-from flask import Flask
-from telegram import Bot
-from ta.momentum import RSIIndicator
-import pandas as pd
-import requests
-import os
+logging.basicConfig(level=logging.INFO)
 
-app = Flask(__name__)
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-bot = Bot(token=BOT_TOKEN)
+# === Flask Route to Receive Webhook Updates ===
+@app.post("/webhook")
+async def webhook() -> tuple:
+    """Webhook endpoint to receive Telegram updates"""
+    update = Update.de_json(request.get_json(force=True), bot)
+    await application.process_update(update)
+    return "ok", 200
 
-SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"]
-INTERVAL = "15m"
-LIMIT = 100
+# === Telegram Command Handler ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚀 Bot is online and ready to send high-risk crypto signals!")
 
-def fetch_data(symbol):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={INTERVAL}&limit={LIMIT}"
-    response = requests.get(url)
-    data = response.json()
-    df = pd.DataFrame(data, columns=[
-        "timestamp", "open", "high", "low", "close", "volume",
-        "close_time", "quote_asset_volume", "number_of_trades",
-        "taker_buy_base_volume", "taker_buy_quote_volume", "ignore"
-    ])
-    df["close"] = pd.to_numeric(df["close"])
-    df["volume"] = pd.to_numeric(df["volume"])
-    return df
+application.add_handler(CommandHandler("start", start))
 
-async def analyze_and_send():
-    for symbol in SYMBOLS:
+# === Background Task to Run Trading Signal Loop ===
+def run_signal_loop():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    while True:
         try:
-            df = fetch_data(symbol)
-            if df.empty:
-                raise ValueError("No data received")
-
-            rsi = RSIIndicator(df["close"], window=14).rsi().iloc[-1]
-            volume = df["volume"].iloc[-1]
-            avg_volume = df["volume"].mean()
-
-            if rsi < 30 and volume > avg_volume * 1.5:
-                msg = f"📉 Oversold Signal\nSymbol: {symbol}\nRSI: {rsi:.2f}\nVolume: {volume:.2f}"
-                await bot.send_message(chat_id=CHAT_ID, text=msg)
-            elif rsi > 70 and volume > avg_volume * 1.5:
-                msg = f"📈 Overbought Signal\nSymbol: {symbol}\nRSI: {rsi:.2f}\nVolume: {volume:.2f}"
-                await bot.send_message(chat_id=CHAT_ID, text=msg)
-
+            loop.run_until_complete(analyze_and_send(bot, CHAT_ID))
+            asyncio.sleep(60)  # Check every 60s
         except Exception as e:
-            await bot.send_message(chat_id=CHAT_ID, text=f"Error for {symbol}: {str(e)}")
+            print(f"Error in loop: {e}")
+
+# === Startup Hook to Set Webhook ===
+@app.before_first_request
+def setup():
+    asyncio.get_event_loop().run_until_complete(bot.set_webhook(url=WEBHOOK_URL))
+    Thread(target=run_signal_loop).start()
+
+# === Render Web Service Ping Route ===
+@app.route("/", methods=["GET"])
 def home():
-    loop = asyncio.get_event_loop()
-    if loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    loop.create_task(analyze_and_send())
-    return "Bot is analyzing and running!"
+    return "✅ Bot running", 200
 
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
-
-async def analyze_and_send():
-    for symbol in SYMBOLS:
-        try:
-            df = fetch_data(symbol)
-            rsi = RSIIndicator(df["close"], window=14).rsi().iloc[-1]
-            volume = df["volume"].iloc[-1]
-            avg_volume = df["volume"].mean()
-            if rsi < 30 and volume > avg_volume * 1.5:
-                msg = f"📉 Oversold Signal\\nSymbol: {symbol}\\nRSI: {rsi:.2f}\\nVolume: {volume:.2f}"
-                await bot.send_message(chat_id=CHAT_ID, text=msg)
-            elif rsi > 70 and volume > avg_volume * 1.5:
-                msg = f"📈 Overbought Signal\\nSymbol: {symbol}\\nRSI: {rsi:.2f}\\nVolume: {volume:.2f}"
-                await bot.send_message(chat_id=CHAT_ID, text=msg)
-        except Exception as e:
-            await bot.send_message(chat_id=CHAT_ID, text=f"Error for {symbol}: {str(e)}")
-
-@app.route('/')
-def home():
-    loop = asyncio.get_event_loop()
-    if loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    loop.create_task(analyze_and_send())
-    return "Bot is analyzing and running!"
-
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
-
-@app.route(f'/{BOT_TOKEN}', methods=["POST"])
-def receive_update():
-    update = telegram.Update.de_json(request.get_json(force=True), bot)
-    bot.process_new_updates([update])
-    return 'ok', 200
-
-
+# === Run Flask app ===
+if __name__ == "__main__":
+    app.run(debug=False, port=10000, host="0.0.0.0")
