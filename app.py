@@ -1,61 +1,67 @@
-import os
-import asyncio
 import logging
+import os
 from flask import Flask, request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from signal_generator import analyze_and_send  # Your custom logic
-from threading import Thread
+# Telegram bot token and chat ID from environment
+TOKEN = os.getenv("TELEGRAM_TOKEN") or "YOUR_BOT_TOKEN"
+CHAT_ID = os.getenv("CHAT_ID") or "YOUR_CHAT_ID"
 
-# Environment variables
-BOT_TOKEN = os.getenv("7307067620:AAEOHrNskxLEWOcMKvuKtVbrJUYpD0zokMA")
-CHAT_ID = os.getenv("-4932382154")
-WEBHOOK_URL = os.getenv("https://crypto-signal-bot2.onrender.com/webhook")  # e.g. https://crypto-signal-bot2.onrender.com/webhook
-
-# Telegram Bot + Flask App
-app = Flask(__name__)
-application = Application.builder().token(BOT_TOKEN).build()
-bot = Bot(BOT_TOKEN)
-
+# Set up logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# === Flask Route to Receive Webhook Updates ===
-@app.post("/webhook")
-async def webhook() -> tuple:
-    """Webhook endpoint to receive Telegram updates"""
-    update = Update.de_json(request.get_json(force=True), bot)
-    await application.process_update(update)
-    return "ok", 200
+# Flask app
+flask_app = Flask(__name__)
+bot = Bot(token=TOKEN)
 
-# === Telegram Command Handler ===
+# Telegram bot application
+tg_app = Application.builder().token(TOKEN).build()
+
+# Command handler: /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚀 Bot is online and ready to send high-risk crypto signals!")
+    await update.message.reply_text("👋 Welcome! High-risk scalping signals coming soon!")
 
-application.add_handler(CommandHandler("start", start))
+# Command handler: /help
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Use /start to begin. Bot will auto-post high-risk scalping signals.")
 
-# === Background Task to Run Trading Signal Loop ===
-def run_signal_loop():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    while True:
-        try:
-            loop.run_until_complete(analyze_and_send(bot, CHAT_ID))
-            asyncio.sleep(60)  # Check every 60s
-        except Exception as e:
-            print(f"Error in loop: {e}")
+# Add handlers
+tg_app.add_handler(CommandHandler("start", start))
+tg_app.add_handler(CommandHandler("help", help_command))
 
-# === Startup Hook to Set Webhook ===
-@app.before_first_request
-def setup():
-    asyncio.get_event_loop().run_until_complete(bot.set_webhook(url=WEBHOOK_URL))
-    Thread(target=run_signal_loop).start()
+# Example function to simulate a crypto signal (you can expand this)
+async def send_crypto_signal():
+    try:
+        msg = "⚡️ New Signal: Buy BTCUSDT (1m) - RSI oversold + high volume"
+        await bot.send_message(chat_id=CHAT_ID, text=msg)
+    except Exception as e:
+        logger.error(f"Failed to send message: {e}")
 
-# === Render Web Service Ping Route ===
-@app.route("/", methods=["GET"])
-def home():
-    return "✅ Bot running", 200
+# Flask webhook route
+@flask_app.route('/webhook', methods=['POST'])
+def webhook():
+    if request.method == "POST":
+        update = Update.de_json(request.get_json(force=True), bot)
+        tg_app.update_queue.put_nowait(update)
+        return 'ok'
+    return 'not allowed'
 
-# === Run Flask app ===
-if __name__ == "__main__":
-    app.run(debug=False, port=10000, host="0.0.0.0")
+# Root check
+@flask_app.route('/', methods=['GET'])
+def root():
+    return "🚀 Crypto Signal Bot Running!"
+
+# Start everything
+if __name__ == '__main__':
+    import asyncio
+    from threading import Thread
+
+    async def run_bot():
+        await tg_app.initialize()
+        await tg_app.start()
+        logger.info("Telegram Bot is running...")
+
+    Thread(target=lambda: asyncio.run(run_bot())).start()
+    flask_app.run(host='0.0.0.0', port=10000)
