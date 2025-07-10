@@ -9,9 +9,9 @@ from signal_generator import analyze_and_send  # Your custom logic
 from threading import Thread
 
 # Environment variables
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://your-bot-url.onrender.com/webhook
+BOT_TOKEN = os.getenv("7307067620:AAEOHrNskxLEWOcMKvuKtVbrJUYpD0zokMA")
+CHAT_ID = os.getenv("-4932382154")
+WEBHOOK_URL = os.getenv("https://crypto-signal-bot2.onrender.com/webhook")  # e.g. https://crypto-signal-bot2.onrender.com/webhook
 
 # Telegram Bot + Flask App
 app = Flask(__name__)
