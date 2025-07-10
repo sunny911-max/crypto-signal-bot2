@@ -3,3 +3,4 @@ pandas
 requests
 ta
 python-telegram-bot
+gunicorn
