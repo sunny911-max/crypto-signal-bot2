@@ -1,41 +1,35 @@
 from flask import Flask, request
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, Bot
+from telegram.ext import Application, CommandHandler, ContextTypes
 import os
-import asyncio
 
-# --- Bot Config ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+bot = Bot(token=BOT_TOKEN)
 
-if not BOT_TOKEN or "your" in BOT_TOKEN:
-    raise Exception("🚨 Set a valid BOT_TOKEN in your Render environment variables")
-
-# --- Flask App ---
+# Flask app
 app = Flask(__name__)
 
-# --- Telegram Bot App ---
+# Telegram app
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-# --- Command: /start ---
+# Command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Bot is alive and webhook is working!")
+    await update.message.reply_text("Hello, I am your crypto bot!")
 
-# --- Echo handler ---
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"📨 You said: {update.message.text}")
-
-# --- Register Handlers ---
 telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-# --- Webhook endpoint ---
+# Webhook endpoint
 @app.route("/webhook", methods=["POST"])
 async def webhook():
-    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+    update = Update.de_json(request.get_json(force=True), bot)
     await telegram_app.process_update(update)
-    return "ok"
+    return "OK"
 
-# --- Health check ---
+# Health check route
 @app.route("/", methods=["GET"])
 def index():
-    return "⚡ Bot is deployed and running!"
+    return "Bot is running."
+
+# Only for local testing
+if __name__ == "__main__":
+    app.run(port=5000)
