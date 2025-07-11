@@ -4,5 +4,5 @@ requests
 ta
 python-telegram-bot
 gunicorn
-python-telegram-bot==22.2
+python-telegram-bot==20.6
 uvicorn
