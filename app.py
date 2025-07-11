@@ -1,32 +1,25 @@
+import os
+import logging
 from flask import Flask, request
-from telegram import Update, Bot
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-import asyncio
+from telegram import Bot, Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
-# === BOT CONFIG ===
-BOT_TOKEN = "7307067620:AAEOHrNskxLEWOcMKvuKtVbrJUYpD0zokMA"
-CHAT_ID = -4932382154  # Group or user ID
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 app = Flask(__name__)
 bot = Bot(token=BOT_TOKEN)
 
-# === Command: /start ===
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Bot is live and responding!")
-
-# === Create Application ===
-application = ApplicationBuilder().token(BOT_TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-
-# === Flask Route for Webhook ===
-@app.route("/webhook", methods=["POST"])
-async def webhook():
-    data = request.get_json(force=True)
-    update = Update.de_json(data, bot)
-    await application.process_update(update)
-    return "OK", 200
-
-# === Root test ===
-@app.route("/")
+@app.route('/')
 def index():
-    return "👋 Bot is running."
+    return 'Bot is running!'
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    if request.method == "POST":
+        update = Update.de_json(request.get_json(force=True), bot)
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        application.process_update(update)
+    return 'ok'
+
+# Optional: You can register /start here if needed
