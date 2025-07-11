@@ -1,38 +1,37 @@
 import os
 from flask import Flask, request
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "7307067620:AAEOHrNskxLEWOcMKvuKtVbrJUYpD0zokMA")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "your_token_here")
 
-if not BOT_TOKEN or BOT_TOKEN.startswith("YOUR_"):
-    raise ValueError("Invalid BOT_TOKEN!")
+# --- Validate Token ---
+if not BOT_TOKEN or "your_token_here" in BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN not set properly")
 
-# Flask setup
+# --- Flask Setup ---
 app = Flask(__name__)
 
-# Telegram app setup
-tg_app = Application.builder().token(BOT_TOKEN).build()
+# --- Telegram Application ---
+telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-# /start command
+# --- Telegram Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Bot is working!")
+    await update.message.reply_text("✅ Bot is alive!")
 
-# Echo for other messages
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"You said: {update.message.text}")
+    await update.message.reply_text(f"Echo: {update.message.text}")
 
-# Register handlers
-tg_app.add_handler(CommandHandler("start", start))
-tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+telegram_app.add_handler(CommandHandler("start", start))
+telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-# Flask routes
+# --- Flask Routes ---
 @app.route("/")
-def home():
-    return "Bot is live ✅"
+def index():
+    return "Bot is running"
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), tg_app.bot)
-    tg_app.update_queue.put_nowait(update)
+    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
+    telegram_app.update_queue.put_nowait(update)
     return "ok"
