@@ -1,35 +1,31 @@
+import os
 from flask import Flask, request
 from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, ContextTypes
-import os
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+# Safety check
+if not BOT_TOKEN:
+    raise ValueError("Missing BOT_TOKEN in environment variables")
+
 bot = Bot(token=BOT_TOKEN)
-
-# Flask app
 app = Flask(__name__)
-
-# Telegram app
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
 # Command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hello, I am your crypto bot!")
+    await update.message.reply_text("✅ Bot is alive!")
 
 telegram_app.add_handler(CommandHandler("start", start))
 
-# Webhook endpoint
+@app.route("/", methods=["GET"])
+def home():
+    return "✅ Bot running."
+
 @app.route("/webhook", methods=["POST"])
 async def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
+    data = request.get_json(force=True)
+    update = Update.de_json(data, bot)
     await telegram_app.process_update(update)
-    return "OK"
-
-# Health check route
-@app.route("/", methods=["GET"])
-def index():
-    return "Bot is running."
-
-# Only for local testing
-if __name__ == "__main__":
-    app.run(port=5000)
+    return "ok"
