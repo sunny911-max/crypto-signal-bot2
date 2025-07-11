@@ -1,36 +1,32 @@
 from flask import Flask, request
-from telegram import Bot, Update
-from telegram.ext import Dispatcher, CommandHandler
+from telegram import Update, Bot
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import asyncio
-import logging
 
-# === BOT CONFIGURATION ===
+# === BOT CONFIG ===
 BOT_TOKEN = "7307067620:AAEOHrNskxLEWOcMKvuKtVbrJUYpD0zokMA"
-CHAT_ID = -4932382154  # Your group/chat ID
+CHAT_ID = -4932382154  # Group or user ID
 
-bot = Bot(token=BOT_TOKEN)
 app = Flask(__name__)
+bot = Bot(token=BOT_TOKEN)
 
-# === COMMAND HANDLER ===
-async def start(update: Update, context):
-    await update.message.reply_text("👋 Bot is live and ready!")
+# === Command: /start ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ Bot is live and responding!")
 
-# === DISPATCHER ===
-dispatcher = Dispatcher(bot, None, workers=0, use_context=True)
-dispatcher.add_handler(CommandHandler("start", start))
+# === Create Application ===
+application = ApplicationBuilder().token(BOT_TOKEN).build()
+application.add_handler(CommandHandler("start", start))
 
-# === WEBHOOK ENDPOINT ===
-@app.route('/webhook', methods=["POST"])
-def webhook_handler():
-    if request.method == "POST":
-        update = Update.de_json(request.get_json(force=True), bot)
-        asyncio.run(dispatcher.process_update(update))
-    return "OK"
+# === Flask Route for Webhook ===
+@app.route("/webhook", methods=["POST"])
+async def webhook():
+    data = request.get_json(force=True)
+    update = Update.de_json(data, bot)
+    await application.process_update(update)
+    return "OK", 200
 
-# === ROOT ENDPOINT ===
-@app.route('/')
+# === Root test ===
+@app.route("/")
 def index():
-    return "👋 Crypto Signal Bot is Running!"
-
-# === OPTIONAL SIGNAL TESTING ===
-# Add your custom `analyze_and_send()` here if you want automated alerts
+    return "👋 Bot is running."
